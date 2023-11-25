@@ -41,7 +41,7 @@ def make_kubernetes_container(
 
         def get_deserialized_object(self):
             if self.data is not None:
-                return ApiClient().deserialize(self, self.class_name)
+                return ApiClient().deserialize(self.data, self.class_name)
             else:
                 return None
 
