@@ -50,6 +50,12 @@ def k8s_retry(deadline_seconds=60, max_backoff=32):
     return decorator
 
 
+def compute_gpu_limits(args):
+    if args["gpu"] is not None:
+        return {"%s.com/gpu".lower() % args["gpu_vendor"]: str(args["gpu"])}
+    return dict()
+
+
 class KubernetesJob(object):
     def __init__(self, client, **kwargs):
         self._client = client
@@ -69,6 +75,19 @@ class KubernetesJob(object):
         # Note: This implementation ensures that there is only one unique Pod
         # (unique UID) per Metaflow task attempt.
         client = self._client.get()
+
+        from kubernetes.client import V1SecurityContext, ApiClient
+
+        class KubernetesClientDataObj(object):
+            def __init__(self, data_dict, class_name):
+                self.data = json.dumps(data_dict) if data_dict is not None else None
+                self.class_name = class_name
+
+            def get_deserialized_object(self):
+                if self.data is not None:
+                    return ApiClient().deserialize(self, self.class_name)
+                else:
+                    return None
 
         # tmpfs variables
         use_tmpfs = self._kwargs["use_tmpfs"]
@@ -148,6 +167,9 @@ class KubernetesJob(object):
                                     if k
                                 ],
                                 image=self._kwargs["image"],
+                                security_context=KubernetesClientDataObj(
+                                    self._kwargs["security_context"], V1SecurityContext
+                                ).get_deserialized_object(),
                                 image_pull_policy=self._kwargs["image_pull_policy"],
                                 name=self._kwargs["step_name"].replace("_", "-"),
                                 resources=client.V1ResourceRequirements(
@@ -158,13 +180,8 @@ class KubernetesJob(object):
                                         % str(self._kwargs["disk"]),
                                     },
                                     limits={
-                                        "%s.com/gpu".lower()
-                                        % self._kwargs["gpu_vendor"]: str(
-                                            self._kwargs["gpu"]
-                                        )
-                                        for k in [0]
-                                        # Don't set GPU limits if gpu isn't specified.
-                                        if self._kwargs["gpu"] is not None
+                                        **compute_gpu_limits(self._kwargs),
+                                        **self._kwargs["resource_limits"],
                                     },
                                 ),
                                 volume_mounts=(
@@ -323,7 +340,6 @@ class KubernetesJob(object):
 
 
 class RunningJob(object):
-
     # State Machine implementation for the lifecycle behavior documented in
     # https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/
     #
@@ -443,7 +459,6 @@ class RunningJob(object):
         client = self._client.get()
         if not self.is_done:
             if self.is_running:
-
                 # Case 1.
                 from kubernetes.stream import stream
 
