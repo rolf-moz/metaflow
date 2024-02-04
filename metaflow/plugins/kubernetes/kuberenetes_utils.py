@@ -97,7 +97,13 @@ def make_kubernetes_container(
                 "memory": "%sM" % str(args["memory"]),
                 "ephemeral-storage": "%sM" % str(args["disk"]),
             },
-            limits=compute_resource_limits(args),
+            limits={
+                **compute_resource_limits(args),
+                **{
+                "cpu": str(args["cpu"]),
+                "memory": "%sM" % str(args["memory"]),
+                }
+            }
         ),
         volume_mounts=(
             [
