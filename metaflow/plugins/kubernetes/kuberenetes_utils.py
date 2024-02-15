@@ -8,7 +8,7 @@ def compute_resource_limits(args):
         limits_dict["memory"] = "%sM" % str(args["resource_limits_memory"])
     if args.get("resource_limits_cpu", None):
         limits_dict["cpu"] = str(args["resource_limits_cpu"])
-    if args["gpu"] is not None:
+    if args["gpu"] is not None and args["gpu"] != "0":
         limits_dict["%s.com/gpu".lower() % args["gpu_vendor"]] = str(args["gpu"])
     return limits_dict
 
@@ -97,7 +97,13 @@ def make_kubernetes_container(
                 "memory": "%sM" % str(args["memory"]),
                 "ephemeral-storage": "%sM" % str(args["disk"]),
             },
-            limits=compute_resource_limits(args),
+            limits={
+                **compute_resource_limits(args),
+                **{
+                "cpu": str(args["cpu"]),
+                "memory": "%sM" % str(args["memory"]),
+                }
+            }
         ),
         volume_mounts=(
             [
